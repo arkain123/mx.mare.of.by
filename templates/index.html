@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MX Tools</title>
+    <script>
+        (function () {
+            var pref = 'auto';
+            try { pref = localStorage.getItem('mx_tools_theme') || 'auto'; } catch (e) {}
+            var resolved = pref === 'auto'
+                ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                : pref;
+            document.documentElement.setAttribute('data-theme', resolved);
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</head>
+<body>
+
+<header>
+    <div class="header-top">
+        <h1>MX Tools</h1>
+        <button id="themeToggle" class="theme-toggle" onclick="cycleTheme()" aria-label="Theme" title="Theme">🌓</button>
+    </div>
+    <nav>
+        <a href="#full" class="tab active" data-tab="full">Full check</a>
+        <a href="#spf" class="tab" data-tab="spf">SPF</a>
+        <a href="#dmarc" class="tab" data-tab="dmarc">DMARC</a>
+        <a href="#dkim" class="tab" data-tab="dkim">DKIM</a>
+        <a href="#mx" class="tab" data-tab="mx">MX</a>
+        <a href="#blacklist" class="tab" data-tab="blacklist">Blacklist</a>
+        <a href="#smtp" class="tab" data-tab="smtp">SMTP</a>
+        <a href="#mailbox" class="tab" data-tab="mailbox">Mailbox</a>
+    </nav>
+</header>
+
+<!-- ===================== FULL ===================== -->
+<section id="tab-full" class="tab-content active">
+    <div class="step">
+        <h2>Full domain / mailbox check</h2>
+        <p class="step-desc">
+            Runs every available check in parallel: SPF, DMARC, DKIM, MX, blacklists, SMTP
+            connectivity. Enter a full email address to additionally probe the mailbox
+            via <code>RCPT TO</code> across ports 25, 587, 2525 and 465.
+        </p>
+        <label>Domain or email</label>
+        <input type="text" id="fullInput" placeholder="example.com or user@example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="full">Run all checks</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-full"></div>
+    </div>
+</section>
+
+<!-- ===================== SPF ===================== -->
+<section id="tab-spf" class="tab-content">
+    <div class="step">
+        <h2>SPF record check</h2>
+        <p class="step-desc">
+            Looks up the domain's TXT SPF record and validates its syntax, mechanisms,
+            and DNS lookup limits (max 10 per RFC 7208).
+        </p>
+        <label>Domain</label>
+        <input type="text" id="spfInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="spf">Check SPF</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-spf"></div>
+    </div>
+</section>
+
+<!-- ===================== DMARC ===================== -->
+<section id="tab-dmarc" class="tab-content">
+    <div class="step">
+        <h2>DMARC record check</h2>
+        <p class="step-desc">
+            Queries the <code>_dmarc</code> subdomain and validates the record's policy
+            tags (<code>p</code>, <code>rua</code>, <code>ruf</code>, <code>pct</code>, ...).
+        </p>
+        <label>Domain</label>
+        <input type="text" id="dmarcInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="dmarc">Check DMARC</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-dmarc"></div>
+    </div>
+</section>
+
+<!-- ===================== DKIM ===================== -->
+<section id="tab-dkim" class="tab-content">
+    <div class="step">
+        <h2>DKIM record check</h2>
+        <p class="step-desc">
+            Looks up <code>&lt;selector&gt;._domainkey.example.com</code>.
+            Leave the selector empty to try ~15 common ones in parallel.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="dkimInput" placeholder="example.com" autocomplete="off">
+        <label style="display:block; margin-top:8px;">Selector (optional)</label>
+        <input type="text" id="dkimSelector" placeholder="default, google, selector1, k1..." autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="dkim">Check DKIM</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-dkim"></div>
+    </div>
+</section>
+
+<!-- ===================== MX ===================== -->
+<section id="tab-mx" class="tab-content">
+    <div class="step">
+        <h2>MX lookup</h2>
+        <p class="step-desc">
+            Returns the domain's MX records sorted by priority, and checks whether each
+            mail exchanger accepts a TCP connection on port 25 from this host.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="mxInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="mx">Lookup MX</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-mx"></div>
+    </div>
+</section>
+
+<!-- ===================== BLACKLIST ===================== -->
+<section id="tab-blacklist" class="tab-content">
+    <div class="step">
+        <h2>Blacklist check</h2>
+        <p class="step-desc">
+            Resolves the domain to an IPv4 address and queries 12 popular DNSBLs
+            (Spamhaus, SpamCop, Barracuda, SORBS, UCEPROTECT, ...).
+        </p>
+        <label>Domain</label>
+        <input type="text" id="blacklistInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="blacklist">Check blacklists</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-blacklist"></div>
+    </div>
+</section>
+
+<!-- ===================== SMTP ===================== -->
+<section id="tab-smtp" class="tab-content">
+    <div class="step">
+        <h2>SMTP connectivity test</h2>
+        <p class="step-desc">
+            Connects to every MX host on port 25, reads the banner, sends
+            <code>EHLO</code> and reports supported extensions. Note: many VPS
+            providers block outbound port 25.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="smtpInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="smtp">Test SMTP</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-smtp"></div>
+    </div>
+</section>
+
+<!-- ===================== MAILBOX ===================== -->
+<section id="tab-mailbox" class="tab-content">
+    <div class="step">
+        <h2>Mailbox existence check</h2>
+        <p class="step-desc">
+            Performs <code>MAIL FROM:&lt;&gt;</code> + <code>RCPT TO:&lt;address&gt;</code>
+            against the domain's MX hosts (or against a specific server if you provide one),
+            on ports 25, 587, 2525 and 465. Note: catch-all servers always answer 250.
+        </p>
+        <label>Email address</label>
+        <input type="text" id="mailboxInput" placeholder="user@example.com" autocomplete="off">
+
+        <label style="display:block; margin-top:8px;">Server (optional)</label>
+        <input type="text" id="mailboxServer"
+               placeholder="IP or MX hostname, e.g. 1.2.3.4 or mx.example.com"
+               autocomplete="off">
+        <p class="hint">Leave empty to use the domain's MX records.</p>
+
+        <br>
+        <button class="run-btn" data-tool="mailbox">Check mailbox</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-mailbox"></div>
+    </div>
+</section>
+
+</body>
+</html>
