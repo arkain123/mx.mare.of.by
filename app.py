@@ -1,7 +1,11 @@
 import logging
 from flask import Flask, request, jsonify, render_template
 
-from checkers import spf, dmarc, dkim, mx, blacklist, smtp, full, mailbox
+from checkers import (
+    spf, dmarc, dkim, mx, blacklist, smtp, full,
+    ptr, tls_cert, mta_sts, tls_rpt, bimi, mailbox,
+    role_accounts, catch_all,
+)
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
@@ -112,6 +116,61 @@ def api_mailbox():
         return jsonify({"error": "Server hostname too long"}), 400
     return _safe(lambda: mailbox.check(raw, server=server))
 
+
+@app.route("/api/ptr", methods=["POST"])
+def api_ptr():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: ptr.check(data["domain"]))
+
+
+@app.route("/api/tls-cert", methods=["POST"])
+def api_tls_cert():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: tls_cert.check(data["domain"]))
+
+
+@app.route("/api/mta-sts", methods=["POST"])
+def api_mta_sts():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: mta_sts.check(data["domain"]))
+
+
+@app.route("/api/tls-rpt", methods=["POST"])
+def api_tls_rpt():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: tls_rpt.check(data["domain"]))
+
+
+@app.route("/api/bimi", methods=["POST"])
+def api_bimi():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: bimi.check(data["domain"]))
+
+
+@app.route("/api/role-accounts", methods=["POST"])
+def api_role_accounts():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: role_accounts.check(data["domain"]))
+
+
+@app.route("/api/catch-all", methods=["POST"])
+def api_catch_all():
+    data, err = _get_payload()
+    if err:
+        return err
+    return _safe(lambda: catch_all.check(data["domain"]))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
