@@ -304,6 +304,206 @@ function renderMailbox(data) {
     return html;
 }
 
+function renderPTR(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var html = data.mismatch_count > 0
+        ? statusDiv('orange', data.mismatch_count + ' PTR mismatch(es) — check your reverse DNS')
+        : statusDiv('green', 'All PTR records match MX hostnames');
+    html += '<table><thead><tr><th>MX</th><th>IP</th><th>PTR</th></tr></thead><tbody>';
+    (data.records || []).forEach(function (r) {
+        (r.ipv4 || []).forEach(function (ip) {
+            var ptrs = (r.ptr && r.ptr[ip]) || [];
+            var ok = ptrs.indexOf(r.host) !== -1;
+            var cell;
+            if (!ptrs.length) {
+                cell = '<span class="tag-bad">none</span>';
+            } else if (ok) {
+                cell = '<span class="tag-ok">' + ptrs.map(esc).join(', ') + '</span>';
+            } else {
+                cell = '<span class="tag-warn">' + ptrs.map(esc).join(', ') + '</span>';
+            }
+            html += '<tr>'
+                + '<td><code>' + esc(r.host) + '</code></td>'
+                + '<td><code>' + esc(ip) + '</code></td>'
+                + '<td>' + cell + '</td>'
+                + '</tr>';
+        });
+    });
+    html += '</tbody></table>';
+    if (data.warnings && data.warnings.length) {
+        html += '<ul class="err-list">'
+            + data.warnings.map(function (w) { return '<li class="warn">' + esc(w) + '</li>'; }).join('')
+            + '</ul>';
+    }
+    return html;
+}
+
+function renderTLSCert(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var html = '';
+    (data.hosts || []).forEach(function (h) {
+        html += '<h3>' + esc(h.host)
+              + ' <span class="muted">(priority ' + h.priority + ')</span></h3>';
+
+        if (!h.ips || !h.ips.length) {
+            html += '<p class="muted">no A records</p>';
+            return;
+        }
+
+        h.ips.forEach(function (item) {
+            html += '<p><b>' + esc(item.ip) + '</b></p>';
+            if (item.error) {
+                html += statusDiv('orange', item.error);
+                return;
+            }
+            var c = item.cert || {};
+            var rows = '';
+            var issuerCN = (c.issuer && (c.issuer.commonName || c.issuer.organizationName)) || '—';
+            var subjectCN = (c.subject && (c.subject.commonName || c.subject.organizationName)) || '—';
+            rows += field('Issuer', esc(issuerCN));
+            rows += field('Subject', esc(subjectCN));
+
+            var days = c.days_left;
+            var daysCell = '—';
+            if (days != null) {
+                var cls = days < 0 ? 'tag-bad' : days < 30 ? 'tag-warn' : 'tag-ok';
+                daysCell = '<span class="' + cls + '">' + days + '</span>';
+            }
+            rows += field('Expires', esc(c.not_after || '—') + ' (' + daysCell + ' days left)');
+            rows += field('Hostname match', boolTag(c.hostname_match, 'matches', 'does NOT match'));
+
+            var san = (c.subject_alt_name || []).join('<br>');
+            if (san) rows += field('SAN', '<code>' + san + '</code>');
+
+            html += '<table>' + rows + '</table>';
+        });
+    });
+    return html || statusDiv('orange', 'No TLS certificates retrieved');
+}
+
+function renderMTASTS(data) {
+    if (!data.valid) {
+        var err = statusDiv('red', data.error || 'lookup failed');
+        if (data.sts_record) err += '<p><b>Record:</b> <code>' + esc(data.sts_record) + '</code></p>';
+        if (data.policy_url) err += '<p><b>Policy URL:</b> <code>' + esc(data.policy_url) + '</code></p>';
+        return err;
+    }
+    var rows = '';
+    rows += field('TXT record', '<code>' + esc(data.sts_record) + '</code>');
+    rows += field('Policy URL', '<code>' + esc(data.policy_url) + '</code>');
+    var policy = data.policy || {};
+    if (policy.version) rows += field('Version', '<code>' + esc(policy.version) + '</code>');
+    if (policy.mode) {
+        var modeCls = policy.mode === 'enforce' ? 'tag-ok'
+                    : policy.mode === 'testing' ? 'tag-warn' : 'muted';
+        rows += field('Mode', '<span class="' + modeCls + '">' + esc(policy.mode) + '</span>');
+    }
+    if (policy.max_age) rows += field('Max age', esc(policy.max_age) + ' seconds');
+    if (policy.mx && policy.mx.length) {
+        rows += field('MX hosts', policy.mx.map(function (m) { return '<code>' + esc(m) + '</code>'; }).join('<br>'));
+    }
+    var html = '<table>' + rows + '</table>';
+    if (data.warnings && data.warnings.length) {
+        html += '<ul class="err-list">'
+            + data.warnings.map(function (w) { return '<li class="warn">' + esc(w) + '</li>'; }).join('')
+            + '</ul>';
+    }
+    return html;
+}
+
+function renderTLSRPT(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var rows = '';
+    rows += field('TXT record', '<code>' + esc(data.record) + '</code>');
+    var rua = data.rua || [];
+    rows += field('rua',
+        rua.length
+            ? rua.map(function (r) { return '<code>' + esc(r) + '</code>'; }).join('<br>')
+            : '<span class="tag-warn">none</span>');
+    var html = '<table>' + rows + '</table>';
+    if (data.warnings && data.warnings.length) {
+        html += '<ul class="err-list">'
+            + data.warnings.map(function (w) { return '<li class="warn">' + esc(w) + '</li>'; }).join('')
+            + '</ul>';
+    }
+    return html;
+}
+
+function renderBIMI(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var rows = '';
+    rows += field('TXT record', '<code>' + esc(data.record) + '</code>');
+    var tags = data.tags || {};
+    Object.keys(tags).forEach(function (k) {
+        rows += field(k, '<code>' + esc(tags[k]) + '</code>');
+    });
+    var logo = data.logo;
+    if (logo) {
+        var cell = '<code>' + esc(logo.url) + '</code> — ';
+        if (logo.status == null) {
+            cell += '<span class="tag-warn">' + esc(logo.content_type) + '</span>';
+        } else if (logo.ok) {
+            cell += '<span class="tag-ok">' + logo.status + ' ' + esc(logo.content_type || '') + '</span>';
+        } else {
+            cell += '<span class="tag-bad">' + logo.status + ' ' + esc(logo.content_type || '') + '</span>';
+        }
+        rows += field('Logo', cell);
+    } else {
+        rows += field('Logo', '<span class="tag-warn">l= is not set</span>');
+    }
+    var html = '<table>' + rows + '</table>';
+    if (data.warnings && data.warnings.length) {
+        html += '<ul class="err-list">'
+            + data.warnings.map(function (w) { return '<li class="warn">' + esc(w) + '</li>'; }).join('')
+            + '</ul>';
+    }
+    return html;
+}
+
+function renderRoleAccounts(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var missing = data.missing_required || [];
+    var html = missing.length
+        ? statusDiv('red', 'Missing required role account(s): ' + missing.join(', '))
+        : statusDiv('green', 'postmaster and abuse exist');
+    html += '<p><b>MX host:</b> <code>' + esc(data.mx_host) + '</code></p>';
+    html += '<table><thead><tr>'
+          + '<th>Role</th><th>Address</th><th>RCPT code</th><th>Exists</th><th>Detail</th>'
+          + '</tr></thead><tbody>';
+    (data.results || []).forEach(function (r) {
+        var detail = r.error ? r.error : (r.message || '');
+        var isRequired = r.role === 'postmaster' || r.role === 'abuse';
+        html += '<tr>'
+            + '<td>' + esc(r.role) + (isRequired ? ' <span class="muted">(required)</span>' : '') + '</td>'
+            + '<td><code>' + esc(r.address) + '</code></td>'
+            + '<td>' + (r.code != null ? r.code : '—') + '</td>'
+            + '<td>' + boolTag(r.exists) + '</td>'
+            + '<td><code>' + esc(detail) + '</code></td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+function renderCatchAll(data) {
+    if (!data.valid) return statusDiv('red', data.error || 'lookup failed');
+    var html = data.catch_all
+        ? statusDiv('orange', 'Catch-all is enabled — random address accepted')
+        : statusDiv('green', 'No catch-all — random address rejected');
+    var rows = '';
+    rows += field('MX host', '<code>' + esc(data.mx_host) + '</code>');
+    rows += field('Probe address', '<code>' + esc(data.probe_address) + '</code>');
+    rows += field('RCPT code', data.rcpt_code != null ? data.rcpt_code : '—');
+    if (data.rcpt_message) rows += field('RCPT message', '<code>' + esc(data.rcpt_message) + '</code>');
+    html += '<table>' + rows + '</table>';
+    if (data.warnings && data.warnings.length) {
+        html += '<ul class="err-list">'
+            + data.warnings.map(function (w) { return '<li class="warn">' + esc(w) + '</li>'; }).join('')
+            + '</ul>';
+    }
+    return html;
+}
+
 function renderSingle(key, data) {
     switch (key) {
         case 'spf': return renderSPF(data);
@@ -313,6 +513,13 @@ function renderSingle(key, data) {
         case 'blacklist': return renderBlacklist(data);
         case 'smtp': return renderSMTP(data);
         case 'mailbox': return renderMailbox(data);
+        case 'ptr': return renderPTR(data);
+        case 'tls-cert': return renderTLSCert(data);
+        case 'mta-sts': return renderMTASTS(data);
+        case 'tls-rpt': return renderTLSRPT(data);
+        case 'bimi': return renderBIMI(data);
+        case 'role-accounts': return renderRoleAccounts(data);
+        case 'catch-all': return renderCatchAll(data);
         default: return '<pre>' + esc(JSON.stringify(data, null, 2)) + '</pre>';
     }
 }
@@ -384,6 +591,13 @@ function collectPayload(tool) {
         case 'blacklist': return { domain: val('blacklistInput') };
         case 'smtp': return { domain: val('smtpInput') };
         case 'mailbox': return { email: val('mailboxInput'), server: val('mailboxServer') };
+        case 'ptr': return { domain: val('ptrInput') };
+        case 'tls-cert': return { domain: val('tls-certInput') };
+        case 'mta-sts': return { domain: val('mta-stsInput') };
+        case 'tls-rpt': return { domain: val('tls-rptInput') };
+        case 'bimi': return { domain: val('bimiInput') };
+        case 'role-accounts': return { domain: val('role-accountsInput') };
+        case 'catch-all': return { domain: val('catch-allInput') };
         default: return {};
     }
 }

@@ -33,6 +33,13 @@
         <a href="#blacklist" class="tab" data-tab="blacklist">Blacklist</a>
         <a href="#smtp" class="tab" data-tab="smtp">SMTP</a>
         <a href="#mailbox" class="tab" data-tab="mailbox">Mailbox</a>
+        <a href="#ptr" class="tab" data-tab="ptr">PTR</a>
+        <a href="#tls-cert" class="tab" data-tab="tls-cert">TLS Cert</a>
+        <a href="#mta-sts" class="tab" data-tab="mta-sts">MTA-STS</a>
+        <a href="#tls-rpt" class="tab" data-tab="tls-rpt">TLS-RPT</a>
+        <a href="#bimi" class="tab" data-tab="bimi">BIMI</a>
+        <a href="#role-accounts" class="tab" data-tab="role-accounts">Role accounts</a>
+        <a href="#catch-all" class="tab" data-tab="catch-all">Catch-all</a>
     </nav>
 </header>
 
@@ -197,6 +204,149 @@
     <div class="step" style="display:none;">
         <h2>Result</h2>
         <div id="result-mailbox"></div>
+    </div>
+</section>
+
+<!-- ===================== PTR ===================== -->
+<section id="tab-ptr" class="tab-content">
+    <div class="step">
+        <h2>PTR check</h2>
+        <p class="step-desc">
+            Resolves each MX host to its IPv4 addresses and looks up PTR records for them.
+            A mismatch between the PTR entry and the MX hostname is a common
+            deliverability issue — many receivers penalise it.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="ptrInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="ptr">Check PTR</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-ptr"></div>
+    </div>
+</section>
+
+<!-- ===================== TLS CERT ===================== -->
+<section id="tab-tls-cert" class="tab-content">
+    <div class="step">
+        <h2>TLS certificate check</h2>
+        <p class="step-desc">
+            Connects to each MX host on port 25, performs <code>STARTTLS</code>, and
+            inspects the presented certificate: issuer, expiry, subjectAltName, and
+            hostname match. Note: many VPS providers block outbound port 25.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="tls-certInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="tls-cert">Check TLS cert</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-tls-cert"></div>
+    </div>
+</section>
+
+<!-- ===================== MTA-STS ===================== -->
+<section id="tab-mta-sts" class="tab-content">
+    <div class="step">
+        <h2>MTA-STS check</h2>
+        <p class="step-desc">
+            Looks up the <code>_mta-sts</code> TXT record and fetches
+            <code>https://mta-sts.&lt;domain&gt;/.well-known/mta-sts.txt</code>
+            to validate the SMTP MTA Strict Transport Security policy (RFC 8461).
+        </p>
+        <label>Domain</label>
+        <input type="text" id="mta-stsInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="mta-sts">Check MTA-STS</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-mta-sts"></div>
+    </div>
+</section>
+
+<!-- ===================== TLS-RPT ===================== -->
+<section id="tab-tls-rpt" class="tab-content">
+    <div class="step">
+        <h2>TLS-RPT check</h2>
+        <p class="step-desc">
+            Queries the <code>_smtp._tls</code> TXT record and extracts the
+            <code>rua</code> reporting destinations for SMTP TLS Reporting (RFC 8460).
+        </p>
+        <label>Domain</label>
+        <input type="text" id="tls-rptInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="tls-rpt">Check TLS-RPT</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-tls-rpt"></div>
+    </div>
+</section>
+
+<!-- ===================== BIMI ===================== -->
+<section id="tab-bimi" class="tab-content">
+    <div class="step">
+        <h2>BIMI check</h2>
+        <p class="step-desc">
+            Looks up <code>default._bimi</code> and validates the <code>v=BIMI1</code>
+            record (<code>l=</code> logo URL, <code>a=</code> VMC authority). Verifies that
+            the logo is served and returned as SVG.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="bimiInput" placeholder="example.com" autocomplete="off">
+        <br><br>
+        <button class="run-btn" data-tool="bimi">Check BIMI</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-bimi"></div>
+    </div>
+</section>
+
+<!-- ===================== ROLE ACCOUNTS ===================== -->
+<section id="tab-role-accounts" class="tab-content">
+    <div class="step">
+        <h2>Role accounts check</h2>
+        <p class="step-desc">
+            Probes <code>postmaster@</code>, <code>abuse@</code>, <code>hostmaster@</code>
+            and <code>webmaster@</code> on the domain's primary MX via <code>RCPT TO</code>.
+            <code>postmaster</code> and <code>abuse</code> are required by RFC 2142 —
+            their absence is a real operational problem.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="role-accountsInput" placeholder="example.com" autocomplete="off">
+        <p class="hint">Requires outbound port 25. Probes only the primary (lowest-priority) MX.</p>
+        <br>
+        <button class="run-btn" data-tool="role-accounts">Check role accounts</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-role-accounts"></div>
+    </div>
+</section>
+
+<!-- ===================== CATCH-ALL ===================== -->
+<section id="tab-catch-all" class="tab-content">
+    <div class="step">
+        <h2>Catch-all check</h2>
+        <p class="step-desc">
+            Probes a random non-existent mailbox on the domain's primary MX via
+            <code>RCPT TO</code>. If the server accepts it (250), catch-all is enabled —
+            a common source of backscatter spam and a signal that every typo address
+            reaches a real inbox.
+        </p>
+        <label>Domain</label>
+        <input type="text" id="catch-allInput" placeholder="example.com" autocomplete="off">
+        <p class="hint">Requires outbound port 25. Probes only the primary (lowest-priority) MX.</p>
+        <br>
+        <button class="run-btn" data-tool="catch-all">Check catch-all</button>
+    </div>
+    <div class="step" style="display:none;">
+        <h2>Result</h2>
+        <div id="result-catch-all"></div>
     </div>
 </section>
 
