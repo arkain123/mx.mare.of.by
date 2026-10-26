@@ -3,8 +3,9 @@
 A web-based toolkit for diagnosing email infrastructure. Runs as a local Flask
 service and covers the practical checks an admin needs when something is wrong
 with mail delivery: SPF, DMARC, DKIM, MX, DNSBL blacklists, SMTP connectivity,
-and mailbox existence probing - without touching the command line or
-remembering `dig` flags.
+mailbox existence probing, reverse DNS, TLS certificates, MTA-STS, TLS-RPT,
+BIMI, role accounts, and catch-all detection - without touching the command
+line or remembering `dig` flags.
 
 ## Features
 
@@ -72,10 +73,65 @@ response:
 - verdicts: `exists`, `not_exists`, `rejected`, `rejected_policy`,
   `temp_fail`, `unreachable`, `inconclusive`
 
+### PTR check
+Resolves each MX host to its IPv4 addresses and looks up the PTR record:
+- shows every PTR entry for every IPv4 address of every MX
+- flags IPs with no PTR at all and IPs whose PTR does not match the MX
+  hostname
+- the mismatch count is a direct deliverability signal: forward-confirmed
+  reverse DNS mismatch is penalised by many receiving MTAs
+
+### TLS certificate check
+Connects to every MX host on port 25, performs `STARTTLS`, and inspects the
+presented certificate:
+- issuer and subject
+- `notAfter` and remaining days (tagged red if expired, orange if under 30
+  days, green otherwise)
+- the full `subjectAltName` list
+- hostname match against the MX hostname
+- graceful per-IP errors: `STARTTLS not advertised`, `STARTTLS failed`,
+  timeouts
+
+### MTA-STS check
+Validates SMTP MTA Strict Transport Security (RFC 8461):
+- looks up `_mta-sts.<domain>` TXT for `v=STSv1`
+- fetches `https://mta-sts.<domain>/.well-known/mta-sts.txt`
+- parses `version`, `mode`, `max_age`, and the `mx:` host list
+- flags `mode` values other than `enforce`
+
+### TLS-RPT check
+Validates SMTP TLS Reporting (RFC 8460):
+- looks up `_smtp._tls.<domain>` TXT for `v=TLSRPTv1`
+- extracts and lists the `rua=` reporting destinations
+- warns when `rua=` is empty
+
+### BIMI check
+Validates Brand Indicators for Message Identification:
+- looks up `default._bimi.<domain>` TXT for `v=BIMI1`
+- parses `l=` (logo URL) and `a=` (VMC authority)
+- performs a HEAD on `l=` and requires a `200` response with
+  `image/svg+xml`
+- warns when the logo is missing or is not an SVG
+
+### Role accounts check
+Probes RFC 2142 role addresses on the domain's primary (lowest-priority) MX:
+- `postmaster@`, `abuse@`, `hostmaster@`, `webmaster@`
+- reports `RCPT TO` code, message, and existence per role
+- `postmaster@` and `abuse@` are required by RFC 2142 - their absence is
+  raised as a red verdict
+- requires outbound port 25
+
+### Catch-all check
+Probes a random non-existent mailbox on the primary MX:
+- `250`/`251` on a random `RCPT TO` means catch-all is enabled
+- warns when catch-all is on: it silently inflates the mailbox check
+  verdict, invites backscatter, and makes every typo address reachable
+- requires outbound port 25
+
 ## Stack
 
-- **Backend:** Python, Flask, `dnspython`, `checkdmarc`, standard-library
-  `smtplib`, `ssl`, `socket`
+- **Backend:** Python, Flask, `dnspython`, `checkdmarc`, `requests`,
+  standard-library `smtplib`, `ssl`, `socket`
 - **Frontend:** a single HTML file with vanilla JavaScript, no build step
 - **Storage:** none - every request is stateless
 
@@ -83,12 +139,16 @@ response:
 
 - Python 3.10+
 - `checkdmarc` >= 5.7 (SPF/DMARC record parsing)
-- `dnspython` >= 2.6 (MX, TXT, A/AAAA, DNSBL queries)
+- `dnspython` >= 2.6 (MX, TXT, A/AAAA, PTR, DNSBL queries)
+- `requests` >= 2.31 (MTA-STS policy fetch, BIMI logo fetch)
 - Outbound TCP to port 53 on some resolver
-- **Outbound TCP to ports 25, 587, 2525, 465** for SMTP/mailbox checks.
-  Most cloud providers block outbound 25; without it, the mailbox probe can
-  only rely on 587/2525/465 and only on servers that do not require AUTH for
-  `RCPT TO`.
+- Outbound HTTPS for the MTA-STS and BIMI checks
+- **Outbound TCP to ports 25, 587, 2525, 465** for SMTP, mailbox, TLS
+  certificate, role account, and catch-all checks. Most cloud providers
+  block outbound 25; without it, the mailbox probe can only rely on
+  587/2525/465 and only on servers that do not require AUTH for `RCPT TO`,
+  while the TLS certificate, role account, and catch-all checks against
+  remote MX hosts will show as unreachable.
 
 ## Installation
 
